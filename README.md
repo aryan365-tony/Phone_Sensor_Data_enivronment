@@ -7,4 +7,5 @@ Basically, Sensor Logger Android App is used on device and its http service is u
 The code accepts the data, filters it and calculate euler's angles and visualize the orientation on 3-D space.
 
 Run Following Commands before running the script
+
 pip install -r requirements.txt
