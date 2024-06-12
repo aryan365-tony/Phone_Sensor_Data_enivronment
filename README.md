@@ -1,4 +1,4 @@
-# Phone_Sensor_Data_enivronment
+# Phone_Sensor_Data_environment
 
 This is a python code that accepts data from phone sensors(accelerometer, gyroscope,magnetometer) and optimize them to calculate phone's orientation
 
