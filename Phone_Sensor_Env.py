@@ -11,6 +11,11 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 
 class HttpClass(BaseHTTPRequestHandler):
+
+    def __init__(self, *args, **kwargs):
+        self.velocity = numpy.zeros(3)
+        self.position = numpy.zeros(3)
+        super().__init__(*args, **kwargs)
     
     def do_POST(self):
         data_length = int(self.headers['Content-Length'])
@@ -22,10 +27,13 @@ class HttpClass(BaseHTTPRequestHandler):
             gyro = pandas.DataFrame(arr[numpy.where(arr[:, 0] == 'gyroscopeuncalibrated')[0]])
             acc = pandas.DataFrame(arr[numpy.where(arr[:, 0] == 'totalacceleration')[0]])
             mag = pandas.DataFrame(arr[numpy.where(arr[:, 0] == 'magnetometer')[0]])
+            accn = pandas.DataFrame(arr[numpy.where(arr[:, 0] == 'accelerometer')[0]])
     
             acc_data = numpy.array([list(item.values()) for item in acc.values[:, 1]])
+            accn_data = numpy.array([list(item.values()) for item in accn.values[:, 1]])
             mag_data = numpy.array([list(item.values()) for item in mag.values[:, 1]])
             rollD,pitchD,yawD = self.calculate_orientation(acc_data,mag_data)
+            self.calculate_position(accn_data,accn[2])
             for i in range(40):
                 app_window.orientation_buffer.append((rollD[i], pitchD[i], yawD[i]))
 
@@ -39,7 +47,7 @@ class HttpClass(BaseHTTPRequestHandler):
 
     def filter_data(self, data):
         filter_criteria = {
-            'name': ['totalacceleration', 'gyroscopeuncalibrated','magnetometer'],
+            'name': ['totalacceleration', 'gyroscopeuncalibrated','magnetometer','accelerometer'],
         }
         
         filtered_data = []
@@ -47,7 +55,6 @@ class HttpClass(BaseHTTPRequestHandler):
         for item in data:
             if item['name'] in filter_criteria['name']:
                 filtered_data.append([item['name'],item['values'],item['time']])
-        
         return filtered_data
     
     def calculate_orientation(self, acc_data, mag_data):
@@ -66,6 +73,20 @@ class HttpClass(BaseHTTPRequestHandler):
         yaw_deg = numpy.degrees(yaw_mag)
 
         return roll_deg,pitch_deg,yaw_deg
+    
+    def calculate_position(self, acc_data,time_data):
+        delta_t = 0.03
+        acc_data=acc_data[:80]
+        
+        for i in range(1, len(acc_data)):
+            self.velocity[0] += acc_data[i][0] * delta_t
+            self.velocity[1] += acc_data[i][1] * delta_t
+            self.velocity[2] += acc_data[i][2] * delta_t
+            self.position[0] += self.velocity[0] * delta_t
+            self.position[1] += self.velocity[1] * delta_t
+            self.position[2] += self.velocity[2] * delta_t
+        
+        app_window.position_buffer.append(tuple(self.position))
 
 def serverStart(server_class=HTTPServer, handler_class=HttpClass, port=8000):
     server_address = ('0.0.0.0', port)
@@ -80,6 +101,7 @@ class OpenGLWidget(QOpenGLWidget):
         self.roll = 0.0
         self.pitch = 0.0
         self.yaw = 0.0
+        self.position = numpy.zeros(3)
 
     def initializeGL(self):
         glClearColor(0.8, 0.8, 0.8, 1.0)
@@ -89,7 +111,7 @@ class OpenGLWidget(QOpenGLWidget):
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        glOrtho(-2, 2, -2, 2, 0.1, 100.0)
+        glOrtho(-5, 5, -5, 2, 0.1, 100.0)
         glMatrixMode(GL_MODELVIEW)
 
     def paintGL(self):
@@ -103,48 +125,50 @@ class OpenGLWidget(QOpenGLWidget):
         glRotatef(float(-self.yaw), 0, 1, 0)
         glRotatef(float(self.pitch), 0, 0, 1)
             
+        glTranslatef(self.position[0], self.position[1], self.position[2])
+
         length = 2.0
         width = 1.0
         height = 0.2
 
         glBegin(GL_QUADS)
 
-        #frontface
+        # Front face
         glColor3f(1.0, 0.0, 0.0)
         glVertex3f(-length / 2, -height / 2, width / 2)
         glVertex3f(length / 2, -height / 2, width / 2)
         glVertex3f(length / 2, height / 2, width / 2)
         glVertex3f(-length / 2, height / 2, width / 2)
 
-        #backface
+        # Back face
         glColor3f(0.0, 1.0, 0.0)
         glVertex3f(-length / 2, -height / 2, -width / 2)
         glVertex3f(-length / 2, height / 2, -width / 2)
         glVertex3f(length / 2, height / 2, -width / 2)
         glVertex3f(length / 2, -height / 2, -width / 2)
 
-        #topface
+        # Top face
         glColor3f(0.0, 0.0, 1.0)
         glVertex3f(-length / 2, height / 2, -width / 2)
         glVertex3f(-length / 2, height / 2, width / 2)
         glVertex3f(length / 2, height / 2, width / 2)
         glVertex3f(length / 2, height / 2, -width / 2)
 
-        #bottomface
+        # Bottom face
         glColor3f(1.0, 1.0, 0.0)
         glVertex3f(-length / 2, -height / 2, -width / 2)
         glVertex3f(length / 2, -height / 2, -width / 2)
         glVertex3f(length / 2, -height / 2, width / 2)
         glVertex3f(-length / 2, -height / 2, width / 2)
 
-        #rightface
+        # Right face
         glColor3f(1.0, 0.0, 1.0)
         glVertex3f(length / 2, -height / 2, -width / 2)
         glVertex3f(length / 2, height / 2, -width / 2)
         glVertex3f(length / 2, height / 2, width / 2)
         glVertex3f(length / 2, -height / 2, width / 2)
 
-        #leftface
+        # Left face
         glColor3f(0.0, 1.0, 1.0)
         glVertex3f(-length / 2, -height / 2, -width / 2)
         glVertex3f(-length / 2, -height / 2, width / 2)
@@ -157,9 +181,14 @@ class OpenGLWidget(QOpenGLWidget):
         self.target_roll = roll
         self.target_pitch = pitch
         self.target_yaw = yaw
-        self.roll += (self.target_roll - self.roll) * 0.25
+
         self.pitch += (self.target_pitch - self.pitch) * 0.25
         self.yaw += (self.target_yaw - self.yaw) * 0.25
+        self.update()
+
+    def update_position(self, position):
+        self.target_position = position
+        self.position += (self.target_position - self.position) * 0.25
         self.update()
 
 class MainWindow(QMainWindow):
@@ -172,17 +201,27 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.openGLWidget)
 
         self.orientation_buffer = []
+        self.position_buffer = []
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.process_orientation_buffer)
         self.timer.start(16)
 
     def update_orientation(self, roll, pitch, yaw):
         self.openGLWidget.update_orientation(roll, pitch, yaw)
+    
+    def update_position(self, position):
+        self.openGLWidget.update_position(position)
+
+    
 
     def process_orientation_buffer(self):
         if self.orientation_buffer:
             roll, pitch, yaw = self.orientation_buffer.pop(0)
             self.update_orientation(roll, pitch, yaw)
+    
+        if self.position_buffer:
+                position = self.position_buffer.pop(0)
+                self.update_position(position)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
