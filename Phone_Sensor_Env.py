@@ -26,7 +26,8 @@ class HttpClass(BaseHTTPRequestHandler):
             acc_data = numpy.array([list(item.values()) for item in acc.values[:, 1]])
             mag_data = numpy.array([list(item.values()) for item in mag.values[:, 1]])
             rollD,pitchD,yawD = self.calculate_orientation(acc_data,mag_data)
-            app_window.update_orientation(rollD, pitchD, yawD)
+            for i in range(40):
+                app_window.orientation_buffer.append((rollD[i], pitchD[i], yawD[i]))
 
         
         except json.JSONDecodeError:
@@ -50,8 +51,8 @@ class HttpClass(BaseHTTPRequestHandler):
         return filtered_data
     
     def calculate_orientation(self, acc_data, mag_data):
-        acc_x, acc_y, acc_z = acc_data[:80, 2], acc_data[:80, 1], acc_data[:80, 0]
-        mag_x, mag_y, mag_z = mag_data[:80, 2], mag_data[:80, 1], mag_data[:80, 0]
+        acc_x, acc_y, acc_z = acc_data[:80:2, 2], acc_data[:80:2, 1], acc_data[:80:2, 0]
+        mag_x, mag_y, mag_z = mag_data[:80:2, 2], mag_data[:80:2, 1], mag_data[:80:2, 0]
 
         pitch_acc = numpy.arctan2(acc_y, numpy.sqrt(acc_x**2 + acc_z**2))
         roll_acc = numpy.arctan2(acc_x, numpy.sqrt(acc_y**2 + acc_z**2))
@@ -76,9 +77,9 @@ class OpenGLWidget(QOpenGLWidget):
     def __init__(self, parent=None):
         super(OpenGLWidget, self).__init__(parent)
         self.setMinimumSize(800, 600)
-        self.roll = 0
-        self.pitch = 0
-        self.yaw = 0
+        self.roll = 0.0
+        self.pitch = 0.0
+        self.yaw = 0.0
 
     def initializeGL(self):
         glClearColor(0.8, 0.8, 0.8, 1.0)
@@ -88,61 +89,77 @@ class OpenGLWidget(QOpenGLWidget):
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(45, w/h, 0.1, 100.0)
+        glOrtho(-2, 2, -2, 2, 0.1, 100.0)
         glMatrixMode(GL_MODELVIEW)
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         glTranslatef(0, 0, -5)
-        glRotatef(numpy.mean(self.roll), 1, 0, 0)
-        glRotatef(numpy.mean(self.pitch), 0, 1, 0)
-        glRotatef(numpy.mean(self.yaw), 0, 0, 1)
+        glRotatef(45, 1, 0, 0)
+        glRotatef(45, 0, 1, 0)
+        
+        glRotatef(float(-self.roll), 1, 0, 0)
+        glRotatef(float(-self.yaw), 0, 1, 0)
+        glRotatef(float(self.pitch), 0, 0, 1)
+            
+        length = 2.0
+        width = 1.0
+        height = 0.2
 
         glBegin(GL_QUADS)
 
+        #frontface
         glColor3f(1.0, 0.0, 0.0)
-        glVertex3f(-1.0, -1.0, 1.0)
-        glVertex3f(1.0, -1.0, 1.0)
-        glVertex3f(1.0, 1.0, 1.0)
-        glVertex3f(-1.0, 1.0, 1.0)
+        glVertex3f(-length / 2, -height / 2, width / 2)
+        glVertex3f(length / 2, -height / 2, width / 2)
+        glVertex3f(length / 2, height / 2, width / 2)
+        glVertex3f(-length / 2, height / 2, width / 2)
 
+        #backface
         glColor3f(0.0, 1.0, 0.0)
-        glVertex3f(-1.0, -1.0, -1.0)
-        glVertex3f(-1.0, 1.0, -1.0)
-        glVertex3f(1.0, 1.0, -1.0)
-        glVertex3f(1.0, -1.0, -1.0)
+        glVertex3f(-length / 2, -height / 2, -width / 2)
+        glVertex3f(-length / 2, height / 2, -width / 2)
+        glVertex3f(length / 2, height / 2, -width / 2)
+        glVertex3f(length / 2, -height / 2, -width / 2)
 
+        #topface
         glColor3f(0.0, 0.0, 1.0)
-        glVertex3f(-1.0, 1.0, -1.0)
-        glVertex3f(-1.0, 1.0, 1.0)
-        glVertex3f(1.0, 1.0, 1.0)
-        glVertex3f(1.0, 1.0, -1.0)
+        glVertex3f(-length / 2, height / 2, -width / 2)
+        glVertex3f(-length / 2, height / 2, width / 2)
+        glVertex3f(length / 2, height / 2, width / 2)
+        glVertex3f(length / 2, height / 2, -width / 2)
 
+        #bottomface
         glColor3f(1.0, 1.0, 0.0)
-        glVertex3f(-1.0, -1.0, -1.0)
-        glVertex3f(1.0, -1.0, -1.0)
-        glVertex3f(1.0, -1.0, 1.0)
-        glVertex3f(-1.0, -1.0, 1.0)
+        glVertex3f(-length / 2, -height / 2, -width / 2)
+        glVertex3f(length / 2, -height / 2, -width / 2)
+        glVertex3f(length / 2, -height / 2, width / 2)
+        glVertex3f(-length / 2, -height / 2, width / 2)
 
+        #rightface
         glColor3f(1.0, 0.0, 1.0)
-        glVertex3f(1.0, -1.0, -1.0)
-        glVertex3f(1.0, 1.0, -1.0)
-        glVertex3f(1.0, 1.0, 1.0)
-        glVertex3f(1.0, -1.0, 1.0)
+        glVertex3f(length / 2, -height / 2, -width / 2)
+        glVertex3f(length / 2, height / 2, -width / 2)
+        glVertex3f(length / 2, height / 2, width / 2)
+        glVertex3f(length / 2, -height / 2, width / 2)
 
+        #leftface
         glColor3f(0.0, 1.0, 1.0)
-        glVertex3f(-1.0, -1.0, -1.0)
-        glVertex3f(-1.0, -1.0, 1.0)
-        glVertex3f(-1.0, 1.0, 1.0)
-        glVertex3f(-1.0, 1.0, -1.0)
+        glVertex3f(-length / 2, -height / 2, -width / 2)
+        glVertex3f(-length / 2, -height / 2, width / 2)
+        glVertex3f(-length / 2, height / 2, width / 2)
+        glVertex3f(-length / 2, height / 2, -width / 2)
 
         glEnd()
 
     def update_orientation(self, roll, pitch, yaw):
-        self.roll = roll
-        self.pitch = pitch
-        self.yaw = yaw
+        self.target_roll = roll
+        self.target_pitch = pitch
+        self.target_yaw = yaw
+        self.roll += (self.target_roll - self.roll) * 0.25
+        self.pitch += (self.target_pitch - self.pitch) * 0.25
+        self.yaw += (self.target_yaw - self.yaw) * 0.25
         self.update()
 
 class MainWindow(QMainWindow):
@@ -154,8 +171,18 @@ class MainWindow(QMainWindow):
         self.openGLWidget = OpenGLWidget(self)
         self.setCentralWidget(self.openGLWidget)
 
+        self.orientation_buffer = []
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.process_orientation_buffer)
+        self.timer.start(16)
+
     def update_orientation(self, roll, pitch, yaw):
         self.openGLWidget.update_orientation(roll, pitch, yaw)
+
+    def process_orientation_buffer(self):
+        if self.orientation_buffer:
+            roll, pitch, yaw = self.orientation_buffer.pop(0)
+            self.update_orientation(roll, pitch, yaw)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
